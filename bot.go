@@ -12,38 +12,35 @@ import (
 const nipple = "connect nipple.tf; password nipple"
 
 type Bot struct {
-	connect_string string
-	channel        string
-	subchannel     bool
-	channel_ID     int32
+	connectString    string
+	channel          string
+	subchannel       bool
+	subchannelString string
+	channelId        int32
 }
 
 func runBot(bot Bot) {
 	gumbleutil.Main(gumbleutil.Listener{
 		Connect: func(e *gumble.ConnectEvent) {
 			if !bot.subchannel {
-				log.Println("HL")
 				e.Client.Self.Move(e.Client.Channels.Find(bot.channel))
 			} else {
-				e.Client.Self.Move(e.Client.Channels.Find(bot.channel, "GC channel"))
+				e.Client.Self.Move(e.Client.Channels.Find(bot.channel, bot.subchannelString))
 			}
 			log.Println("Connected.")
 		},
 		TextMessage: func(e *gumble.TextMessageEvent) {
 			if strings.Contains(e.TextMessage.Message, "connect") {
-				bot.connect_string = e.TextMessage.Message
-				e.Sender.Send("Connect received: " + bot.connect_string)
-				log.Printf("Connect: %v received from %v", bot.connect_string, e.Sender.Name)
+				bot.connectString = e.TextMessage.Message
+				e.Sender.Send("Connect received: " + bot.connectString)
+				log.Printf("Connect: %v received from %v", bot.connectString, e.Sender.Name)
 			}
 		},
 		UserChange: func(e *gumble.UserChangeEvent) {
 			if e.Type.Has(gumble.UserChangeConnected) {
-				if !bot.subchannel {
-					e.Client.Self.Move(e.Client.Channels.Find(bot.channel))
-				} else {
-					if e.User.Channel == e.Client.Channels.Find(bot.channel, "GC channel") {
+				if e.User.Name != "ConnectBot" {
+					if e.User.Channel.ID == uint32(bot.channelId) {
 						log.Printf("%v connected.\n", e.User.Name)
-						e.User.Send(bot.connect_string)
 					}
 				}
 
@@ -51,11 +48,11 @@ func runBot(bot Bot) {
 			if e.Type.Has(gumble.UserChangeChannel) {
 				log.Printf("%v changed channel to %v.\n", e.User.Name, e.User.Channel.Name)
 				if len(e.Client.Self.Channel.Users) == 1 {
-					bot.connect_string = nipple
+					bot.connectString = nipple
 				}
 				if e.User.Name != "ConnectBot" {
-					if e.User.Channel.ID == uint32(bot.channel_ID) {
-						e.User.Send(bot.connect_string)
+					if e.User.Channel.ID == uint32(bot.channelId) {
+						e.User.Send(bot.connectString)
 					}
 				}
 			}
@@ -63,7 +60,7 @@ func runBot(bot Bot) {
 				log.Printf("%v disconnected.\n", e.User.Name)
 				log.Printf("Users: %v", len(e.Client.Self.Channel.Users))
 				if len(e.Client.Self.Channel.Users) == 1 {
-					bot.connect_string = nipple
+					bot.connectString = nipple
 				}
 			}
 		},
@@ -81,8 +78,8 @@ func main() {
 	log.SetOutput(logFile)
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 
-	sixes := Bot{connect_string: nipple, channel: "Others", subchannel: true, channel_ID: 1384}
-	hl := Bot{connect_string: nipple, channel: "9v9 Xenon", subchannel: false, channel_ID: 18}
+	sixes := Bot{connectString: nipple, channel: "Others", subchannelString: "GC channel", subchannel: true, channelId: 1384}
+	hl := Bot{connectString: nipple, channel: "9v9 Xenon", subchannelString: "", subchannel: false, channelId: 18}
 
 	if strings.Contains(os.Args[1], "icewind") {
 		runBot(hl)
