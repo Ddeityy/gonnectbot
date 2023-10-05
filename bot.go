@@ -4,30 +4,26 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"layeh.com/gumble/gumble"
 	"layeh.com/gumble/gumbleutil"
 )
 
-const nipple = "connect nipple.tf; password nipple"
-
 type Bot struct {
-	connectString    string
-	channel          string
-	subchannel       bool
-	subchannelString string
-	channelId        int32
+	connectString        string
+	defaultConnectString string
+	channelTree          []string
 }
 
 func runBot(bot Bot) {
 	gumbleutil.Main(gumbleutil.Listener{
 		Connect: func(e *gumble.ConnectEvent) {
-			if !bot.subchannel {
-				e.Client.Self.Move(e.Client.Channels.Find(bot.channel))
-			} else {
-				e.Client.Self.Move(e.Client.Channels.Find(bot.channel, bot.subchannelString))
+			if len(bot.channelTree) > 0 {
+				e.Client.Self.Move(e.Client.Channels.Find(bot.channelTree...))
+				log.Println("Connected.")
 			}
-			log.Println("Connected.")
+			time.Sleep(time.Second * 1)
 		},
 		TextMessage: func(e *gumble.TextMessageEvent) {
 			if strings.Contains(e.TextMessage.Message, "connect") {
@@ -39,8 +35,11 @@ func runBot(bot Bot) {
 		UserChange: func(e *gumble.UserChangeEvent) {
 			if e.Type.Has(gumble.UserChangeConnected) {
 				if e.User.Name != "ConnectBot" {
-					if e.User.Channel.ID == uint32(bot.channelId) {
-						log.Printf("%v connected.\n", e.User.Name)
+					if e.User.Channel.Name == e.Client.Self.Channel.Name {
+						if len(bot.connectString) > 0 {
+							e.User.Send(bot.connectString)
+							log.Printf("%v connected.\n", e.User.Name)
+						}
 					}
 				}
 
@@ -48,11 +47,13 @@ func runBot(bot Bot) {
 			if e.Type.Has(gumble.UserChangeChannel) {
 				log.Printf("%v changed channel to %v.\n", e.User.Name, e.User.Channel.Name)
 				if len(e.Client.Self.Channel.Users) == 1 {
-					bot.connectString = nipple
+					bot.connectString = bot.defaultConnectString
 				}
 				if e.User.Name != "ConnectBot" {
-					if e.User.Channel.ID == uint32(bot.channelId) {
-						e.User.Send(bot.connectString)
+					if e.User.Channel.Name == e.Client.Self.Channel.Name {
+						if len(bot.connectString) > 0 {
+							e.User.Send(bot.connectString)
+						}
 					}
 				}
 			}
@@ -60,30 +61,38 @@ func runBot(bot Bot) {
 				log.Printf("%v disconnected.\n", e.User.Name)
 				log.Printf("Users: %v", len(e.Client.Self.Channel.Users))
 				if len(e.Client.Self.Channel.Users) == 1 {
-					bot.connectString = nipple
+					bot.connectString = bot.defaultConnectString
 				}
 			}
 		},
 	})
 }
 
-func main() {
-	fileName := "bot.log"
-	logFile, err := os.OpenFile(fileName, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
+func initLogging() {
+	file, err := openLogFile("./bot.log")
 	if err != nil {
-		log.Panic(err)
+		log.Fatal(err)
 	}
-	defer logFile.Close()
+	log.SetOutput(file)
+	log.SetFlags(log.LstdFlags | log.Lshortfile | log.Lmicroseconds)
 
-	log.SetOutput(logFile)
-	log.SetFlags(log.Lshortfile | log.LstdFlags)
+	log.Println("log file created")
+}
 
-	sixes := Bot{connectString: nipple, channel: "Others", subchannelString: "GC channel", subchannel: true, channelId: 1384}
-	hl := Bot{connectString: nipple, channel: "9v9 Xenon", subchannelString: "", subchannel: false, channelId: 18}
-
-	if strings.Contains(os.Args[1], "icewind") {
-		runBot(hl)
-	} else {
-		runBot(sixes)
+func openLogFile(path string) (*os.File, error) {
+	logFile, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+	if err != nil {
+		return nil, err
 	}
+	return logFile, nil
+}
+
+func main() {
+	initLogging()
+	defaultConnectString := os.Getenv("DEFAULT")
+	channels := os.Getenv("CHANNELS")
+	channelTree := strings.Split(channels, "/") // "Others/GC channel"
+	bot := Bot{channelTree: channelTree, defaultConnectString: defaultConnectString}
+	runBot(bot)
+
 }
