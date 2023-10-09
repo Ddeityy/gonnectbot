@@ -1,8 +1,13 @@
 package main
 
 import (
+	"crypto/tls"
+	"flag"
+	"fmt"
 	"log"
+	"net"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,12 +17,81 @@ import (
 
 type Bot struct {
 	connectString        string
-	defaultConnectString string
+	defaultConnectString *string
 	channelTree          []string
 }
 
+var (
+	defaultConnectString *string
+	channelTree          []string
+)
+
+func client(listeners ...gumble.EventListener) {
+	server := flag.String("server", "localhost:64738", "Mumble server address")
+	username := flag.String("username", "gumble-bot", "client username")
+	password := flag.String("password", "", "client password")
+	insecure := flag.Bool("insecure", false, "skip server certificate verification")
+	certificateFile := flag.String("certificate", "", "user certificate file (PEM)")
+	keyFile := flag.String("key", "", "user certificate key file (PEM)")
+	defaultConnectString = flag.String("default", "", "default string to send out")
+	channels := flag.String("channel", "", "channel names separated by `/` `root/channel/subchannel`")
+	channelTree = strings.Split(*channels, "/")
+
+	if !flag.Parsed() {
+		flag.Parse()
+	}
+
+	host, port, err := net.SplitHostPort(*server)
+	if err != nil {
+		host = *server
+		port = strconv.Itoa(gumble.DefaultPort)
+	}
+
+	keepAlive := make(chan bool)
+
+	config := gumble.NewConfig()
+	config.Username = *username
+	config.Password = *password
+	address := net.JoinHostPort(host, port)
+
+	var tlsConfig tls.Config
+
+	if *insecure {
+		tlsConfig.InsecureSkipVerify = true
+	}
+	if *certificateFile != "" {
+		if *keyFile == "" {
+			keyFile = certificateFile
+		}
+		if certificate, err := tls.LoadX509KeyPair(*certificateFile, *keyFile); err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %s\n", os.Args[0], err)
+			os.Exit(1)
+		} else {
+			tlsConfig.Certificates = append(tlsConfig.Certificates, certificate)
+		}
+	}
+	config.Attach(gumbleutil.AutoBitrate)
+	for _, listener := range listeners {
+		config.Attach(listener)
+	}
+	config.Attach(gumbleutil.Listener{
+		Disconnect: func(e *gumble.DisconnectEvent) {
+			keepAlive <- true
+		},
+	})
+	_, err = gumble.DialWithDialer(new(net.Dialer), address, config, &tlsConfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: %s\n", os.Args[0], err)
+		os.Exit(1)
+	}
+
+	<-keepAlive
+}
+
 func runBot(bot Bot) {
-	gumbleutil.Main(gumbleutil.Listener{
+	bot.channelTree = channelTree
+	bot.defaultConnectString = defaultConnectString
+	client(gumbleutil.Listener{
 		Connect: func(e *gumble.ConnectEvent) {
 			if len(bot.channelTree) > 0 {
 				e.Client.Self.Move(e.Client.Channels.Find(bot.channelTree...))
@@ -47,7 +121,7 @@ func runBot(bot Bot) {
 			if e.Type.Has(gumble.UserChangeChannel) {
 				log.Printf("%v changed channel to %v.\n", e.User.Name, e.User.Channel.Name)
 				if len(e.Client.Self.Channel.Users) == 1 {
-					bot.connectString = bot.defaultConnectString
+					bot.connectString = *bot.defaultConnectString
 				}
 				if e.User.Name != "ConnectBot" {
 					if e.User.Channel.Name == e.Client.Self.Channel.Name {
@@ -61,38 +135,14 @@ func runBot(bot Bot) {
 				log.Printf("%v disconnected.\n", e.User.Name)
 				log.Printf("Users: %v", len(e.Client.Self.Channel.Users))
 				if len(e.Client.Self.Channel.Users) == 1 {
-					bot.connectString = bot.defaultConnectString
+					bot.connectString = *bot.defaultConnectString
 				}
 			}
 		},
 	})
 }
 
-func initLogging() {
-	file, err := openLogFile("./bot.log")
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.SetOutput(file)
-	log.SetFlags(log.LstdFlags | log.Lshortfile | log.Lmicroseconds)
-
-	log.Println("log file created")
-}
-
-func openLogFile(path string) (*os.File, error) {
-	logFile, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
-	if err != nil {
-		return nil, err
-	}
-	return logFile, nil
-}
-
 func main() {
-	initLogging()
-	defaultConnectString := os.Getenv("DEFAULT")
-	channels := os.Getenv("CHANNELS")
-	channelTree := strings.Split(channels, "/") // "Others/GC channel"
-	bot := Bot{channelTree: channelTree, defaultConnectString: defaultConnectString}
+	bot := Bot{}
 	runBot(bot)
-
 }
