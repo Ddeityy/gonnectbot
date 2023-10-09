@@ -17,29 +17,44 @@ import (
 
 type Bot struct {
 	connectString        string
-	defaultConnectString *string
+	defaultConnectString string
 	channelTree          []string
 }
 
-var (
-	defaultConnectString *string
-	channelTree          []string
-)
+// var (
+//
+//	defaultConnectString *string
+//	channelTree          []string
+//
+// )
 
-func client(listeners ...gumble.EventListener) {
+func client(cchan chan []string, dchan chan string, listeners ...gumble.EventListener) {
 	server := flag.String("server", "localhost:64738", "Mumble server address")
 	username := flag.String("username", "gumble-bot", "client username")
 	password := flag.String("password", "", "client password")
 	insecure := flag.Bool("insecure", false, "skip server certificate verification")
 	certificateFile := flag.String("certificate", "", "user certificate file (PEM)")
 	keyFile := flag.String("key", "", "user certificate key file (PEM)")
-	defaultConnectString = flag.String("default", "", "default string to send out")
+
+	defaultConnectString := flag.String("default", "", "default string to send out")
 	channels := flag.String("channel", "", "channel names separated by `/` `root/channel/subchannel`")
-	channelTree = strings.Split(*channels, "/")
 
 	if !flag.Parsed() {
 		flag.Parse()
 	}
+
+	channelTree := strings.Split(*channels, "/")
+
+	go func() {
+		cchan <- channelTree
+	}()
+
+	go func() {
+		dchan <- *defaultConnectString
+	}()
+
+	defer close(cchan)
+	defer close(dchan)
 
 	host, port, err := net.SplitHostPort(*server)
 	if err != nil {
@@ -89,10 +104,12 @@ func client(listeners ...gumble.EventListener) {
 }
 
 func runBot(bot Bot) {
-	bot.channelTree = channelTree
-	bot.defaultConnectString = defaultConnectString
-	client(gumbleutil.Listener{
+	cchan := make(chan []string)
+	dchan := make(chan string)
+	client(cchan, dchan, gumbleutil.Listener{
 		Connect: func(e *gumble.ConnectEvent) {
+			bot.channelTree = <-cchan
+			bot.defaultConnectString = <-dchan
 			if len(bot.channelTree) > 0 {
 				e.Client.Self.Move(e.Client.Channels.Find(bot.channelTree...))
 				log.Println("Connected.")
@@ -121,7 +138,7 @@ func runBot(bot Bot) {
 			if e.Type.Has(gumble.UserChangeChannel) {
 				log.Printf("%v changed channel to %v.\n", e.User.Name, e.User.Channel.Name)
 				if len(e.Client.Self.Channel.Users) == 1 {
-					bot.connectString = *bot.defaultConnectString
+					bot.connectString = bot.defaultConnectString
 				}
 				if e.User.Name != "ConnectBot" {
 					if e.User.Channel.Name == e.Client.Self.Channel.Name {
@@ -135,11 +152,12 @@ func runBot(bot Bot) {
 				log.Printf("%v disconnected.\n", e.User.Name)
 				log.Printf("Users: %v", len(e.Client.Self.Channel.Users))
 				if len(e.Client.Self.Channel.Users) == 1 {
-					bot.connectString = *bot.defaultConnectString
+					bot.connectString = bot.defaultConnectString
 				}
 			}
 		},
 	})
+
 }
 
 func main() {
