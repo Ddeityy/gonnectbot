@@ -114,6 +114,7 @@ func runBot(bot Bot) {
 				e.Client.Self.Move(e.Client.Channels.Find(bot.channelTree...))
 				log.Println("Connected.")
 			}
+			bot.connectString = bot.defaultConnectString
 			time.Sleep(time.Second * 1)
 		},
 		TextMessage: func(e *gumble.TextMessageEvent) {
@@ -125,8 +126,11 @@ func runBot(bot Bot) {
 		},
 		UserChange: func(e *gumble.UserChangeEvent) {
 			if e.Type.Has(gumble.UserChangeConnected) {
+				log.Println(1)
 				if e.User.Name != "ConnectBot" {
+					log.Println(2)
 					if e.User.Channel.Name == e.Client.Self.Channel.Name {
+						log.Println(3)
 						if len(bot.connectString) > 0 {
 							e.User.Send(bot.connectString)
 							log.Printf("%v connected.\n", e.User.Name)
@@ -141,8 +145,11 @@ func runBot(bot Bot) {
 					bot.connectString = bot.defaultConnectString
 				}
 				if e.User.Name != "ConnectBot" {
+					log.Println(1)
 					if e.User.Channel.Name == e.Client.Self.Channel.Name {
+						log.Println(bot.connectString)
 						if len(bot.connectString) > 0 {
+							log.Println(3)
 							e.User.Send(bot.connectString)
 						}
 					}
