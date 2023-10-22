@@ -21,13 +21,6 @@ type Bot struct {
 	channelTree          []string
 }
 
-// var (
-//
-//	defaultConnectString *string
-//	channelTree          []string
-//
-// )
-
 func client(cchan chan []string, dchan chan string, listeners ...gumble.EventListener) {
 	server := flag.String("server", "localhost:64738", "Mumble server address")
 	username := flag.String("username", "gumble-bot", "client username")
@@ -126,15 +119,9 @@ func runBot(bot Bot) {
 		},
 		UserChange: func(e *gumble.UserChangeEvent) {
 			if e.Type.Has(gumble.UserChangeConnected) {
-				log.Println(1)
 				if e.User.Name != "ConnectBot" {
-					log.Println(2)
 					if e.User.Channel.Name == e.Client.Self.Channel.Name {
-						log.Println(3)
-						if len(bot.connectString) > 0 {
-							e.User.Send(bot.connectString)
-							log.Printf("%v connected.\n", e.User.Name)
-						}
+						log.Printf("%v connected.\n", e.User.Name)
 					}
 				}
 
@@ -145,12 +132,11 @@ func runBot(bot Bot) {
 					bot.connectString = bot.defaultConnectString
 				}
 				if e.User.Name != "ConnectBot" {
-					log.Println(1)
 					if e.User.Channel.Name == e.Client.Self.Channel.Name {
 						log.Println(bot.connectString)
 						if len(bot.connectString) > 0 {
-							log.Println(3)
 							e.User.Send(bot.connectString)
+							log.Printf("Sent connect to %s", e.User.Name)
 						}
 					}
 				}
