@@ -60,6 +60,7 @@ func client(cchan chan []string, dchan chan string, listeners ...gumble.EventLis
 	config := gumble.NewConfig()
 	config.Username = *username
 	config.Password = *password
+
 	address := net.JoinHostPort(host, port)
 
 	var tlsConfig tls.Config
@@ -67,6 +68,7 @@ func client(cchan chan []string, dchan chan string, listeners ...gumble.EventLis
 	if *insecure {
 		tlsConfig.InsecureSkipVerify = true
 	}
+
 	if *certificateFile != "" {
 		if *keyFile == "" {
 			keyFile = certificateFile
@@ -78,19 +80,23 @@ func client(cchan chan []string, dchan chan string, listeners ...gumble.EventLis
 			tlsConfig.Certificates = append(tlsConfig.Certificates, certificate)
 		}
 	}
+
 	config.Attach(gumbleutil.AutoBitrate)
 	for _, listener := range listeners {
 		config.Attach(listener)
 	}
+
 	config.Attach(gumbleutil.Listener{
 		Disconnect: func(e *gumble.DisconnectEvent) {
 			keepAlive <- true
 		},
 	})
+
 	_, err = gumble.DialWithDialer(new(net.Dialer), address, config, &tlsConfig)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %s\n", os.Args[0], err)
-		os.Exit(1)
+		log.Printf("%s: %s\n", os.Args[0], err)
+		time.Sleep(time.Second * 30)
+		client(cchan, dchan, listeners...)
 	}
 
 	<-keepAlive
