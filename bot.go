@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"layeh.com/gumble/gumble"
+	"layeh.com/gumble/gumbleffmpeg"
 	"layeh.com/gumble/gumbleutil"
 )
 
@@ -105,6 +106,9 @@ func client(cchan chan []string, dchan chan string, listeners ...gumble.EventLis
 func runBot(bot Bot) {
 	cchan := make(chan []string)
 	dchan := make(chan string)
+
+	var stream *gumbleffmpeg.Stream
+
 	client(cchan, dchan, gumbleutil.Listener{
 		Connect: func(e *gumble.ConnectEvent) {
 			bot.channelTree = <-cchan
@@ -125,7 +129,7 @@ func runBot(bot Bot) {
 		},
 		UserChange: func(e *gumble.UserChangeEvent) {
 			if e.Type.Has(gumble.UserChangeConnected) {
-				if e.User.Name != "ConnectBot" {
+				if e.User.Name != "_ConnectBot" {
 					if e.User.Channel.Name == e.Client.Self.Channel.Name {
 						log.Printf("%v connected.\n", e.User.Name)
 					}
@@ -137,8 +141,22 @@ func runBot(bot Bot) {
 				if len(e.Client.Self.Channel.Users) == 1 {
 					bot.connectString = bot.defaultConnectString
 				}
-				if e.User.Name != "ConnectBot" {
+				if e.User.Name != "_ConnectBot" {
 					if e.User.Channel.Name == e.Client.Self.Channel.Name {
+						if len(e.Client.Users) > 1 {
+							if stream != nil && stream.State() == gumbleffmpeg.StatePlaying {
+								return
+							}
+
+							stream = gumbleffmpeg.New(e.Client, gumbleffmpeg.SourceFile("./attention.mp3"))
+							log.Println(stream.Source)
+							if err := stream.Play(); err != nil {
+								log.Printf("%s\n", err)
+							} else {
+								log.Printf("Playing %s\n", "attention.mp3")
+							}
+
+						}
 						log.Println(bot.connectString)
 						if len(bot.connectString) > 0 {
 							e.User.Send(bot.connectString)
