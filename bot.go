@@ -14,6 +14,8 @@ import (
 	"layeh.com/gumble/gumble"
 	"layeh.com/gumble/gumbleffmpeg"
 	"layeh.com/gumble/gumbleutil"
+
+	_ "layeh.com/gumble/opus"
 )
 
 type Bot struct {
@@ -143,13 +145,12 @@ func runBot(bot Bot) {
 				}
 				if e.User.Name != "_ConnectBot" {
 					if e.User.Channel.Name == e.Client.Self.Channel.Name {
-						if len(e.Client.Users) > 1 {
+						if len(e.Client.Users) > 9 {
 							if stream != nil && stream.State() == gumbleffmpeg.StatePlaying {
 								return
 							}
 
 							stream = gumbleffmpeg.New(e.Client, gumbleffmpeg.SourceFile("./attention.mp3"))
-							log.Println(stream.Source)
 							if err := stream.Play(); err != nil {
 								log.Printf("%s\n", err)
 							} else {
