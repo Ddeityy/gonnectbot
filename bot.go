@@ -145,7 +145,7 @@ func runBot(bot Bot) {
 				}
 				if e.User.Name != "_ConnectBot" {
 					if e.User.Channel.Name == e.Client.Self.Channel.Name {
-						if len(e.Client.Users) > 9 {
+						if len(e.User.Channel.Users) > 9 {
 							if stream != nil && stream.State() == gumbleffmpeg.StatePlaying {
 								return
 							}
