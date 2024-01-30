@@ -109,8 +109,6 @@ func runBot(bot Bot) {
 	cchan := make(chan []string)
 	dchan := make(chan string)
 
-	var stream *gumbleffmpeg.Stream
-
 	client(cchan, dchan, gumbleutil.Listener{
 		Connect: func(e *gumble.ConnectEvent) {
 			bot.channelTree = <-cchan
@@ -145,18 +143,10 @@ func runBot(bot Bot) {
 				}
 				if e.User.Name != "_ConnectBot" {
 					if e.User.Channel.Name == e.Client.Self.Channel.Name {
-						if len(e.User.Channel.Users) > 9 {
-							if stream != nil && stream.State() == gumbleffmpeg.StatePlaying {
-								return
+						if e.User.Name == "Fish" || e.User.Name == "fishage" {
+							if fishLate() {
+								bullyFish(e)
 							}
-
-							stream = gumbleffmpeg.New(e.Client, gumbleffmpeg.SourceFile("./attention.mp3"))
-							if err := stream.Play(); err != nil {
-								log.Printf("%s\n", err)
-							} else {
-								log.Printf("Playing %s\n", "attention.mp3")
-							}
-
 						}
 						log.Println(bot.connectString)
 						if len(bot.connectString) > 0 {
@@ -176,6 +166,32 @@ func runBot(bot Bot) {
 		},
 	})
 
+}
+
+func fishLate() bool {
+	now := time.Now()
+
+	if now.Minute() >= 30 {
+		now.Local().Add(time.Hour * 1)
+	}
+
+	rounded := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, now.Location())
+
+	return now.After(rounded)
+}
+
+func bullyFish(e *gumble.UserChangeEvent) {
+	var stream *gumbleffmpeg.Stream
+	if stream != nil && stream.State() == gumbleffmpeg.StatePlaying {
+		return
+	}
+
+	stream = gumbleffmpeg.New(e.Client, gumbleffmpeg.SourceFile("./fish/fish1.mp3"))
+	if err := stream.Play(); err != nil {
+		log.Printf("%s\n", err)
+	} else {
+		log.Printf("Playing %s\n", "./fish/fish1.mp3")
+	}
 }
 
 func main() {
