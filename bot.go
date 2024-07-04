@@ -177,12 +177,12 @@ func fishLate() bool {
 
 	rounded := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, now.Location())
 
-	return now.After(rounded)
+	return !now.After(rounded)
 }
 
 func bullyFish(e *gumble.UserChangeEvent) {
-	var stream *gumbleffmpeg.Stream
-	if stream != nil && stream.State() == gumbleffmpeg.StatePlaying {
+	stream := &gumbleffmpeg.Stream{}
+	if stream.State() == gumbleffmpeg.StatePlaying {
 		return
 	}
 
