@@ -2,8 +2,6 @@ package main
 
 import (
 	"crypto/tls"
-	"flag"
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -12,7 +10,6 @@ import (
 	"time"
 
 	"layeh.com/gumble/gumble"
-	"layeh.com/gumble/gumbleffmpeg"
 	"layeh.com/gumble/gumbleutil"
 
 	_ "layeh.com/gumble/opus"
@@ -24,60 +21,51 @@ type Bot struct {
 	channelTree          []string
 }
 
-func client(cchan chan []string, dchan chan string, listeners ...gumble.EventListener) {
-	server := flag.String("server", "localhost:64738", "Mumble server address")
-	username := flag.String("username", "gumble-bot", "client username")
-	password := flag.String("password", "", "client password")
-	insecure := flag.Bool("insecure", false, "skip server certificate verification")
-	certificateFile := flag.String("certificate", "", "user certificate file (PEM)")
-	keyFile := flag.String("key", "", "user certificate key file (PEM)")
-
-	defaultConnectString := flag.String("default", "", "default string to send out")
-	channels := flag.String("channel", "", "channel names separated by `/` `root/channel/subchannel`")
-
-	if !flag.Parsed() {
-		flag.Parse()
+func client(listeners ...gumble.EventListener) {
+	server := os.Getenv("MUMBLE_SERVER")
+	if server == "" {
+		server = "localhost:64738"
 	}
 
-	channelTree := strings.Split(*channels, "/")
+	username := os.Getenv("MUMBLE_USERNAME")
+	if username == "" {
+		username = "gumble-bot"
+	}
 
-	go func() {
-		cchan <- channelTree
-	}()
+	password := os.Getenv("MUMBLE_PASSWORD")
 
-	go func() {
-		dchan <- *defaultConnectString
-	}()
+	insecure := os.Getenv("MUMBLE_INSECURE")
+	insecureBool, _ := strconv.ParseBool(insecure)
 
-	defer close(cchan)
-	defer close(dchan)
+	certificateFile := os.Getenv("MUMBLE_CERT_FILE")
+	keyFile := os.Getenv("MUMBLE_KEY_FILE")
 
-	host, port, err := net.SplitHostPort(*server)
+	host, port, err := net.SplitHostPort(server)
 	if err != nil {
-		host = *server
+		host = server
 		port = strconv.Itoa(gumble.DefaultPort)
 	}
 
 	keepAlive := make(chan bool)
 
 	config := gumble.NewConfig()
-	config.Username = *username
-	config.Password = *password
+	config.Username = username
+	config.Password = password
 
 	address := net.JoinHostPort(host, port)
 
 	var tlsConfig tls.Config
 
-	if *insecure {
+	if insecureBool {
 		tlsConfig.InsecureSkipVerify = true
 	}
 
-	if *certificateFile != "" {
-		if *keyFile == "" {
+	if certificateFile != "" {
+		if keyFile == "" {
 			keyFile = certificateFile
 		}
-		if certificate, err := tls.LoadX509KeyPair(*certificateFile, *keyFile); err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %s\n", os.Args[0], err)
+		if certificate, err := tls.LoadX509KeyPair(certificateFile, keyFile); err != nil {
+			log.Printf("%s: %s\n", os.Args[0], err)
 			os.Exit(1)
 		} else {
 			tlsConfig.Certificates = append(tlsConfig.Certificates, certificate)
@@ -98,21 +86,16 @@ func client(cchan chan []string, dchan chan string, listeners ...gumble.EventLis
 	_, err = gumble.DialWithDialer(new(net.Dialer), address, config, &tlsConfig)
 	if err != nil {
 		log.Printf("%s: %s\n", os.Args[0], err)
-		time.Sleep(time.Second * 30)
-		client(cchan, dchan, listeners...)
+		time.Sleep(5 * time.Second)
+		client(listeners...)
 	}
 
 	<-keepAlive
 }
 
 func runBot(bot Bot) {
-	cchan := make(chan []string)
-	dchan := make(chan string)
-
-	client(cchan, dchan, gumbleutil.Listener{
+	client(gumbleutil.Listener{
 		Connect: func(e *gumble.ConnectEvent) {
-			bot.channelTree = <-cchan
-			bot.defaultConnectString = <-dchan
 			if len(bot.channelTree) > 0 {
 				e.Client.Self.Move(e.Client.Channels.Find(bot.channelTree...))
 				log.Println("Connected.")
@@ -143,11 +126,6 @@ func runBot(bot Bot) {
 				}
 				if e.User.Name != "_ConnectBot" {
 					if e.User.Channel.Name == e.Client.Self.Channel.Name {
-						if e.User.Name == "Fish" || e.User.Name == "fishage" {
-							if fishLate() {
-								bullyFish(e)
-							}
-						}
 						log.Println(bot.connectString)
 						if len(bot.connectString) > 0 {
 							e.User.Send(bot.connectString)
@@ -168,33 +146,14 @@ func runBot(bot Bot) {
 
 }
 
-func fishLate() bool {
-	now := time.Now()
-
-	if now.Minute() >= 30 {
-		now.Local().Add(time.Hour * 1)
-	}
-
-	rounded := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, now.Location())
-
-	return !now.After(rounded)
-}
-
-func bullyFish(e *gumble.UserChangeEvent) {
-	stream := &gumbleffmpeg.Stream{}
-	if stream.State() == gumbleffmpeg.StatePlaying {
-		return
-	}
-
-	stream = gumbleffmpeg.New(e.Client, gumbleffmpeg.SourceFile("./fish/fish1.mp3"))
-	if err := stream.Play(); err != nil {
-		log.Printf("%s\n", err)
-	} else {
-		log.Printf("Playing %s\n", "./fish/fish1.mp3")
-	}
-}
-
 func main() {
-	bot := Bot{}
+	channels := os.Getenv("MUMBLE_CHANNELS")
+	splitChannels := strings.Split(channels, ",")
+
+	bot := Bot{
+		"",
+		os.Getenv("MUMBLE_DEFAULT_STRING"),
+		splitChannels,
+	}
 	runBot(bot)
 }

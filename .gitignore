@@ -1,0 +1,4 @@
+mumble-cert.pem
+mumble-key.pem
+.vscode
+.env
