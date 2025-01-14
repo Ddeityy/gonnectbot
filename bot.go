@@ -11,8 +11,6 @@ import (
 
 	"layeh.com/gumble/gumble"
 	"layeh.com/gumble/gumbleutil"
-
-	_ "layeh.com/gumble/opus"
 )
 
 type Bot struct {
@@ -86,8 +84,7 @@ func client(listeners ...gumble.EventListener) {
 	_, err = gumble.DialWithDialer(new(net.Dialer), address, config, &tlsConfig)
 	if err != nil {
 		log.Printf("%s: %s\n", os.Args[0], err)
-		time.Sleep(5 * time.Second)
-		client(listeners...)
+		os.Exit(1)
 	}
 
 	<-keepAlive
